@@ -76,8 +76,13 @@ with pages[0]:
             st.stop()
         lead_id = upsert_lead(lead)
         run_id = create_run(lead_id)
-        with st.spinner("Running the agent team…"):
-            results = run_pipeline(lead)
+        try:
+    with st.spinner("Running the agent team…"):
+        results = run_pipeline(lead)
+except Exception as exc:
+    st.error("Pipeline failed.")
+    st.exception(exc)
+    raise
         save_results(run_id, lead_id, results)
         proposal = next(r.output for r in results if r.agent == "Proposal Writer")
         outreach = next(r.output for r in results if r.agent == "Outreach Agent")
