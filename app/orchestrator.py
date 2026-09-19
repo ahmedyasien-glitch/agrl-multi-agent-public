@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from typing import Any
 
 try:
@@ -63,18 +63,11 @@ def run_pipeline(lead: dict[str, Any]) -> list[AgentResult]:
     offer = deterministic_offer(lead, audit.output)
     results.append(_maybe_llm(adapter, "Offer Strategist", offer, {"lead": lead, "audit": audit.output}))
 
-    # Two branches can run in parallel after the offer/audit stage.
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futs = {
-            ex.submit(deterministic_gis_brief, lead, offer.output): "GIS Brief Agent",
-            ex.submit(deterministic_proposal, lead, offer.output, deterministic_gis_brief(lead, offer.output).output): "Proposal Writer",
-            ex.submit(deterministic_outreach, lead, deterministic_proposal(lead, offer.output, deterministic_gis_brief(lead, offer.output).output).output): "Outreach Agent",
-        }
-        branch = [f.result() for f in futs]
-    # Keep a predictable order.
-    order = {name: i for i, name in enumerate(["Proposal Writer", "GIS Brief Agent", "Outreach Agent"])}
-    branch.sort(key=lambda r: order[r.agent])
-    results.extend(branch)
+    gis = deterministic_gis_brief(lead, offer.output)
+proposal = deterministic_proposal(lead, offer.output, gis.output)
+outreach = deterministic_outreach(lead, proposal.output)
+
+results.extend([proposal, gis, outreach])
 
     gis = next(r for r in results if r.agent == "GIS Brief Agent")
     prod = deterministic_production(lead, offer.output, gis.output)
